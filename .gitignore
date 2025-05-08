@@ -1,0 +1,13 @@
+# Clojure
+/server/target/
+/server/.nrepl-port
+
+# Prolog
+*.qlf
+*.pl~
+*.swp
+
+# Общее
+.DS_Store
+.idea/
+*.iml
