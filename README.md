@@ -56,7 +56,3 @@ swipl client/client.pl
 ## Управление
 - WASD - движение
 - Q - выход
-
-## Участники
-- [Ваше имя](https://github.com/ваш-логин)
-- [Участник 2](https://github.com/...)
