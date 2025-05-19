@@ -59,8 +59,11 @@
         max-y (dec (count map-rows))
         max-x (dec (count (first map-rows)))
         new-x (max 0 (min (+ (:x player) dx) max-x))
-        new-y (max 0 (min (+ (:y player) dy) max-y))]
-    (if (and player (not= \# (get-in map-rows [new-y new-x])))
+        new-y (max 0 (min (+ (:y player) dy) max-y))
+        target-char (get-in map-rows [new-y new-x] \space)
+        wall-chars #{\║ \═ \╣ \╔ \╗ \╝ \╚ \╦}] ;; Все символы стен
+    (if (and player 
+             (not (contains? wall-chars target-char))) ;; Проверяем, что целевая позиция не стена
       (assoc-in state [:players player-id] (assoc player :x new-x :y new-y))
       state)))
 
