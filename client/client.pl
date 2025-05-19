@@ -1,5 +1,6 @@
 :- use_module(library(socket)).
 :- use_module(library(http/json)).
+:- use_module(library(thread)).
 
 connect_to_server :-
     tcp_connect(localhost:12345, Stream, [type(text)]),
@@ -7,7 +8,21 @@ connect_to_server :-
 
     choose_role(Stream, _Role),
     format('Connected. Use WASD to move, E to place mine, Q to quit~n~n', []),
+    
+    thread_create(update_listener(Stream), _, [detached(true)]),
+    
     client_loop(Stream).
+
+update_listener(Stream) :-
+    repeat,
+        (   read_line_to_string(Stream, Response)
+        ->  format('~n~n~n~n~n~n~n~n~n~n~n', []),
+            display_map(Response)
+        ;   format('Server disconnected~n', []),
+            close(Stream),
+            !
+        ),
+    fail.
 
 choose_role(Stream, Role) :-
     format('Choose your role:~n1 - Victim~n2 - Maniac~n', []),
@@ -35,13 +50,7 @@ client_loop(Stream) :-
         close(Stream)
     ;   (   memberchk(Char, [0'w, 0's, 0'a, 0'd, 0'e])
         ->  format(Stream, '~c~n', [Char]),
-            flush_output(Stream),
-            (   read_line_to_string(Stream, Response)
-            ->  format('~n~n~n~n~n~n~n~n~n~n~n', []),
-                display_map(Response)
-            ;   format('Server disconnected~n', []),
-                close(Stream)
-            )
+            flush_output(Stream)
         ;   true
         ),
         client_loop(Stream)

@@ -31,8 +31,10 @@
     :total-victims 0
     :game-over nil
     :start-time (System/currentTimeMillis)
-    :duration-ms (* 1 60 1000) ; 2 минуты
+    :duration-ms (* 2 60 1000) ; 2 минуты
   }))
+
+(defonce clients (atom {}))
 
 (defn add-player [state player-id type]
   (let [new-player {:type type 
@@ -93,11 +95,11 @@
     (if (and maniac (seq mines))
       (let [maniac-pos {:x (get-in maniac [1 :x]) :y (get-in maniac [1 :y])}
             stepped-on-mine? (some #(and (= (:x %) (:x maniac-pos))
-                                         (= (:y %) (:y maniac-pos))) 
-                                   mines)]
+                                        (= (:y %) (:y maniac-pos)))
+                                  mines)]
         (if stepped-on-mine?
           (let [updated-mines (remove #(and (= (:x %) (:x maniac-pos))
-                                           (= (:y %) (:y maniac-pos))) 
+                                           (= (:y %) (:y maniac-pos)))
                                      mines)
                 mines-stepped (inc (:mines-stepped state))]
             (-> state
@@ -155,12 +157,12 @@
       (let [mines-msg (str "Доступно мин: " (get-in state [:players player-id :mines]))
             mines-stepped-msg (str "Маньяк наступил на мин: " (:mines-stepped state) "/3")
             map-with-mines (reduce (fn [m mine]
-                                      (let [x (:x mine), y (:y mine)
-                                            row (nth m y)
-                                            updated-row (str (subs row 0 x) "*" (subs row (inc x)))]
-                                        (assoc m y updated-row)))
-                                   base-map
-                                   (:mines state))]
+                                    (let [x (:x mine), y (:y mine)
+                                          row (nth m y)
+                                          updated-row (str (subs row 0 x) "*" (subs row (inc x)))]
+                                      (assoc m y updated-row)))
+                                  base-map
+                                  (:mines state))]
         (conj map-with-mines mines-msg mines-stepped-msg))
 
       (= type :maniac)
@@ -175,6 +177,12 @@
                     base-map
                     (:players state))]
         (conj hidden-map (str "Поймано жертв: " (:caught-victims state)))))))
+
+(defn broadcast-state [state]
+  (doseq [[player-id {:keys [out]}] @clients]
+    (let [view-map (get-visible-map state player-id)]
+      (.println out (json/write-str {:map view-map}))
+      (.flush out))))
 
 (defn process-command [state cmd player-id]
   (if (= (:game-over state) nil)
@@ -192,22 +200,25 @@
                               :else
                               state)
           state-with-mines (check-mines state-with-action)
-          collided (check-collisions state-with-mines)]
-      (update-game-over collided))
+          collided (check-collisions state-with-mines)
+          new-state (update-game-over collided)]
+      (broadcast-state new-state)
+      new-state)
     state))
 
 (defn handle-client [socket player-id]
   (with-open [in (java.io.BufferedReader. (java.io.InputStreamReader. (.getInputStream socket)))
               out (java.io.PrintWriter. (.getOutputStream socket) true)]
+    (swap! clients assoc player-id {:in in :out out})
     (let [role-str (.readLine in)
           type (case role-str "maniac" :maniac "victim" :victim :victim)]
       (swap! game-state add-player player-id type)
+      (broadcast-state @game-state)
       (loop []
         (when-let [cmd (.readLine in)]
-          (let [new-state (swap! game-state process-command cmd player-id)
-                view-map (get-visible-map new-state player-id)]
-            (.println out (json/write-str {:map view-map}))
-            (recur)))))))
+          (swap! game-state process-command cmd player-id)
+          (recur))))
+    (swap! clients dissoc player-id)))
 
 (defn start-server [port]
   (println "Server started on port" port)
