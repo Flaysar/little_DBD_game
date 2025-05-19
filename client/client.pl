@@ -6,7 +6,7 @@ connect_to_server :-
     set_stream(Stream, encoding(utf8)),
 
     choose_role(Stream, _Role),
-    format('Connected. Use WASD to move, Q to quit~n~n', []),
+    format('Connected. Use WASD to move, E to place mine, Q to quit~n~n', []),
     client_loop(Stream).
 
 choose_role(Stream, Role) :-
@@ -33,7 +33,7 @@ client_loop(Stream) :-
     (   char_code('q', Char)
     ->  format('Quitting...~n', []),
         close(Stream)
-    ;   (   memberchk(Char, [0'w, 0's, 0'a, 0'd])
+    ;   (   memberchk(Char, [0'w, 0's, 0'a, 0'd, 0'e])
         ->  format(Stream, '~c~n', [Char]),
             flush_output(Stream),
             (   read_line_to_string(Stream, Response)
