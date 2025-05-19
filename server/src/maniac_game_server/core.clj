@@ -23,17 +23,23 @@
           "#             #                #"
           "################################"]
     :players {}
+    :mines []
+    :mines-stepped 0
     :boxes []
     :alive-victims 0
     :caught-victims 0
     :total-victims 0
     :game-over nil
     :start-time (System/currentTimeMillis)
-    :duration-ms (* 2 60 1000) ; 2 минуты
+    :duration-ms (* 1 60 1000) ; 2 минуты
   }))
 
 (defn add-player [state player-id type]
-  (let [new-player {:type type :x 1 :y 1 :speed (if (= type :maniac) 2 1)}]
+  (let [new-player {:type type 
+                    :x 1 
+                    :y 1 
+                    :speed (if (= type :maniac) 2 1)
+                    :mines (if (= type :victim) 3 0)}]
     (-> state
         (assoc-in [:players player-id] new-player)
         ((fn [s]
@@ -70,6 +76,36 @@
         updated-row (str (subs row 0 x) symbol (subs row (inc x)))]
     (assoc-in state [:map y] updated-row)))
 
+(defn place-mine [state player-id]
+  (let [player (get-in state [:players player-id])]
+    (if (and player 
+             (= (:type player) :victim) 
+             (pos? (:mines player)))
+      (-> state
+          (update :mines conj {:x (:x player) :y (:y player)})
+          (update-in [:players player-id :mines] dec))
+      state)))
+
+(defn check-mines [state]
+  (let [players (:players state)
+        mines (:mines state)
+        maniac (first (filter (fn [[_ p]] (= (:type p) :maniac)) players))]
+    (if (and maniac (seq mines))
+      (let [maniac-pos {:x (get-in maniac [1 :x]) :y (get-in maniac [1 :y])}
+            stepped-on-mine? (some #(and (= (:x %) (:x maniac-pos))
+                                         (= (:y %) (:y maniac-pos))) 
+                                   mines)]
+        (if stepped-on-mine?
+          (let [updated-mines (remove #(and (= (:x %) (:x maniac-pos))
+                                           (= (:y %) (:y maniac-pos))) 
+                                     mines)
+                mines-stepped (inc (:mines-stepped state))]
+            (-> state
+                (assoc :mines updated-mines)
+                (assoc :mines-stepped mines-stepped)))
+          state))
+      state)))
+
 (defn check-collisions [state]
   (let [players (:players state)
         maniac (first (filter (fn [[_ p]] (= (:type p) :maniac)) players))
@@ -93,6 +129,9 @@
       (and (zero? (:alive-victims state))
            (= (:caught-victims state) (:total-victims state)))
       (assoc state :game-over "МАНЬЯК ПОБЕДИЛ")
+      
+      (>= (:mines-stepped state) 3)
+      (assoc state :game-over "ПОБЕДА ЖЕРТВ: МАНЬЯК НАСТУПИЛ НА 3 МИНЫ")
 
       (>= t end)
       (assoc state :game-over "ПОБЕДА ЖЕРТВ")
@@ -113,7 +152,16 @@
        "Нажмите Q для выхода"]
 
       (= type :victim)
-      base-map
+      (let [mines-msg (str "Доступно мин: " (get-in state [:players player-id :mines]))
+            mines-stepped-msg (str "Маньяк наступил на мин: " (:mines-stepped state) "/3")
+            map-with-mines (reduce (fn [m mine]
+                                      (let [x (:x mine), y (:y mine)
+                                            row (nth m y)
+                                            updated-row (str (subs row 0 x) "*" (subs row (inc x)))]
+                                        (assoc m y updated-row)))
+                                   base-map
+                                   (:mines state))]
+        (conj map-with-mines mines-msg mines-stepped-msg))
 
       (= type :maniac)
       (let [hidden-map
@@ -131,13 +179,20 @@
 (defn process-command [state cmd player-id]
   (if (= (:game-over state) nil)
     (let [action (str/trim cmd)
-          moved-state (if (#{"w" "a" "s" "d"} action)
-                        (-> state
-                            (clear-player player-id)
-                            (move-player player-id action)
-                            (update-map player-id))
-                        state)
-          collided (check-collisions moved-state)]
+          state-with-action (cond
+                              (#{"w" "a" "s" "d"} action)
+                              (-> state
+                                  (clear-player player-id)
+                                  (move-player player-id action)
+                                  (update-map player-id))
+                              
+                              (= action "e")
+                              (place-mine state player-id)
+                              
+                              :else
+                              state)
+          state-with-mines (check-mines state-with-action)
+          collided (check-collisions state-with-mines)]
       (update-game-over collided))
     state))
 
