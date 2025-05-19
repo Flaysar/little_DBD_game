@@ -77,7 +77,7 @@
 (defn update-map [state player-id]
   (let [player (get-in state [:players player-id])
         {:keys [x y type]} player
-        symbol (if (= type :maniac) "☠" "V")
+        symbol (if (= type :maniac) "☠" "☺")
         row (get-in state [:map y])
         updated-row (str (subs row 0 x) symbol (subs row (inc x)))]
     (assoc-in state [:map y] updated-row)))
@@ -163,7 +163,7 @@
             map-with-mines (reduce (fn [m mine]
                                     (let [x (:x mine), y (:y mine)
                                           row (nth m y)
-                                          updated-row (str (subs row 0 x) "*" (subs row (inc x)))]
+                                          updated-row (str (subs row 0 x) "¤" (subs row (inc x)))]
                                       (assoc m y updated-row)))
                                   base-map
                                   (:mines state))]
